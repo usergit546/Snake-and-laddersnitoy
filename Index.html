@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Snakes and Ladders - 2 Players</title>
+
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        padding: 15px;
+        font-family: Arial, sans-serif;
+        background: #f2f2f2;
+        text-align: center;
+    }
+
+    h1 {
+        margin: 5px 0;
+        font-size: 26px;
+    }
+
+    #game {
+        width: min(95vw, 600px);
+        margin: auto;
+    }
+
+    #board {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        display: grid;
+        grid-template-columns: repeat(10, 1fr);
+        border: 4px solid black;
+        background: white;
+        touch-action: none;
+    }
+
+    .cell {
+        position: relative;
+        border: 1px solid #777;
+        background: #fff4d6;
+        font-size: clamp(8px, 2.2vw, 14px);
+        font-weight: bold;
+    }
+
+    .cell:nth-child(even) {
+        background: #dff0df;
+    }
+
+    .number {
+        position: absolute;
+        top: 2px;
+        left: 3px;
+    }
+
+    #lines {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        left: 0;
+        top: 0;
+        pointer-events: none;
+    }
+
+    .ladder {
+        stroke: green;
+        stroke-width: 2;
+    }
+
+    .snake {
+        stroke: red;
+        stroke-width: 2.5;
+        fill: none;
+    }
+
+    .player {
+        position: absolute;
+        width: 7%;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 5;
+        border: 2px solid black;
+        touch-action: none;
+    }
+
+    #player1 {
+        background: blue;
+    }
+
+    #player2 {
+        background: yellow;
+    }
+
+    .dragging {
+        transform: translate(-50%, -50%) scale(1.2);
+    }
+
+    #controls {
+        margin-top: 15px;
+        padding: 15px;
+        background: white;
+        border-radius: 12px;
+    }
+
+    button {
+        padding: 12px 18px;
+        margin: 5px;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: bold;
+    }
+
+    #rollButton {
+        background: black;
+        color: white;
+    }
+
+    #resetButton {
+        background: #ddd;
+    }
+
+    button:disabled {
+        opacity: 0.5;
+    }
+
+    #message {
+        margin-top: 10px;
+        min-height: 25px;
+        font-weight: bold;
+    }
+
+    .cheating {
+        color: red;
+    }
+
+    .correct {
+        color: green;
+    }
+
+    .winner {
+        color: purple;
+        font-size: 20px;
+    }
+</style>
+</head>
+
+<body>
+
+<div id="game">
+
+    <h1>🐍 Snakes & Ladders 🪜</h1>
+
+    <p>
+        <strong id="turnLabel">
+            🔵 Player 1's Turn
+        </strong>
+    </p>
+
+    <p>
+        🎲 Dice:
+        <strong id="diceLabel">-</strong>
+    </p>
+
+    <div id="board">
+
+        <!-- Board cells are created by JavaScript -->
+
+        <svg id="lines"
+             viewBox="0 0 100 100"
+             preserveAspectRatio="none">
+
+            <!-- Ladders -->
+
+            <line class="ladder"
+                  x1="25" y1="95"
+                  x2="25" y2="78"/>
+
+            <line class="ladder"
+                  x1="75" y1="95"
+                  x2="75" y2="72"/>
+
+            <line class="ladder"
+                  x1="75" y1="75"
+                  x2="15" y2="15"/>
+
+            <line class="ladder"
+                  x1="45" y1="65"
+                  x2="55" y2="55"/>
+
+            <line class="ladder"
+                  x1="5" y1="55"
+                  x2="35" y2="35"/>
+
+            <!-- Snakes -->
+
+            <path class="snake"
+                  d="M65 15
+                     Q50 25 65 35
+                     Q80 45 65 55"/>
+
+            <path class="snake"
+                  d="M35 55
+                     Q20 65 35 75
+                     Q45 80 25 90"/>
+
+            <path class="snake"
+                  d="M15 45
+                     Q30 55 15 65"/>
+
+            <path class="snake"
+                  d="M35 35
+                     Q50 40 40 50"/>
+
+            <path class="snake"
+                  d="M75 5
+                     Q60 15 75 25"/>
+
+        </svg>
+
+        <div id="player1" class="player"></div>
+        <div id="player2" class="player"></div>
+
+    </div>
+
+    <div id="controls">
+
+        <button id="rollButton">
+            🎲 ROLL DICE
+        </button>
+
+        <button id="resetButton">
+            🔄 RESET
+        </button>
+
+        <div id="message">
+            Player 1, roll the dice!
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+/* =========================
+   GAME VARIABLES
+========================= */
+
+let player1 = 1;
+let player2 = 1;
+
+let currentPlayer = 1;
+
+let dice = 0;
+
+let target = null;
+
+let dragging = false;
+
+let draggedPlayer = null;
+
+
+/* =========================
+   HTML ELEMENTS
+========================= */
+
+const board =
+    document.getElementById("board");
+
+const player1Ball =
+    document.getElementById("player1");
+
+const player2Ball =
+    document.getElementById("player2");
+
+const turnLabel =
+    document.getElementById("turnLabel");
+
+const diceLabel =
+    document.getElementById("diceLabel");
+
+const message =
+    document.getElementById("message");
+
+const rollButton =
+    document.getElementById("rollButton");
+
+const resetButton =
+    document.getElementById("resetButton");
+
+
+/* =========================
+   SNAKES
+========================= */
+
+const snakes = {
+
+    17: 7,
+    47: 26,
+    62: 19,
+    64: 60,
+    93: 73
+
+};
+
+
+/* =========================
+   LADDERS
+========================= */
+
+const ladders = {
+
+    3: 22,
+    8: 30,
+    28: 84,
+    36: 44,
+    51: 67
+
+};
+
+
+/* =========================
+   CREATE BOARD
+========================= */
+
+function createBoard() {
+
+    for (let row = 9; row >= 0; row--) {
+
+        let numbers = [];
+
+        for (let i = 1; i <= 10; i++) {
+
+            numbers.push(
+                row * 10 + i
+            );
+
+        }
+
+        /*
+         * Every other row goes
+         * in the opposite direction.
+         */
+
+        if ((9 - row) % 2 === 1) {
+
+            numbers.reverse();
+
+        }
+
+        numbers.forEach(number => {
+
+            const cell =
+                document.createElement("div");
+
+            cell.className = "cell";
+
+            const numberText =
+                document.createElement("span");
+
+            numberText.className = "number";
+
+            numberText.textContent = number;
+
+            cell.appendChild(numberText);
+
+            board.insertBefore(
+                cell,
+                document.getElementById("lines")
+            );
+
+        });
+
+    }
+
+}
+
+
+/* =========================
+   GET BALL POSITION
+========================= */
+
+function getPosition(square) {
+
+    const zero =
+        square - 1;
+
+    let row =
+        Math.floor(zero / 10);
+
+    let col =
+        zero % 10;
+
+    if (row % 2 === 1) {
+
+        col =
+            9 - col;
+
+    }
+
+    const x =
+        ((col + 0.5) / 10) * 100;
+
+    const y =
+        ((9 - row + 0.5) / 10) * 100;
+
+    return {
+        x: x,
+        y: y
+    };
+
+}
+
+
+/* =========================
+   UPDATE BALLS
+========================= */
+
+function updateBalls() {
+
+    const p1 =
+        getPosition(player1);
+
+    const p2 =
+        getPosition(player2);
+
+    player1Ball.style.left =
+        p1.x + "%";
+
+    player1Ball.style.top =
+        p1.y + "%";
+
+    player2Ball.style.left =
+        p2.x + "%";
+
+    player2Ball.style.top =
+        p2.y + "%";
+
+}
+
+
+/* =========================
+   ROLL DICE
+========================= */
+
+rollButton.addEventListener(
+    "click",
+    function () {
+
+        if (target !== null) {
+            return;
+        }
+
+        dice =
+            Math.floor(
+                Math.random() * 6
+            ) + 1;
+
+        diceLabel.textContent =
+            dice;
+
+        let currentPosition;
+
+        if (currentPlayer === 1) {
+
+            currentPosition =
+                player1;
+
+        } else {
+
+            currentPosition =
+                player2;
+
+        }
+
+        target =
+            currentPosition + dice;
+
+
+        /* Exact 100 rule */
+
+        if (target > 100) {
+
+            message.textContent =
+                "You need an exact roll to reach 100.";
+
+            target = null;
+
+            return;
+        }
+
+
+        message.className = "";
+
+        message.textContent =
+            "Move exactly " +
+            dice +
+            " spaces to square " +
+            target + "!";
+
+        rollButton.disabled = true;
+
+    }
+);
+
+
+/* =========================
+   FIND SQUARE
+========================= */
+
+function getSquareFromPointer(event) {
+
+    const rect =
+        board.getBoundingClientRect();
+
+    const x =
+        event.clientX -
+        rect.left;
+
+    const y =
+        event.clientY -
+        rect.top;
+
+
+    if (
+        x < 0 ||
+        y < 0 ||
+        x > rect.width ||
+        y > rect.height
+    ) {
+
+        return null;
+
+    }
+
+
+    const col =
+        Math.floor(
+            (x / rect.width) * 10
+        );
+
+    const screenRow =
+        Math.floor(
+            (y / rect.height) * 10
+        );
+
+    let row =
+        9 - screenRow;
+
+    let actualCol =
+        col;
+
+
+    if (row % 2 === 1) {
+
+        actualCol =
+            9 - col;
+
+    }
+
+
+    return (
+        row * 10 +
+        actualCol +
+        1
+    );
+
+}
+
+
+/* =========================
+   START DRAGGING
+========================= */
+
+function startDragging(
+    event,
+    player
+) {
+
+    if (target === null) {
+        return;
+    }
+
+    if (player !== currentPlayer) {
+        return;
+    }
+
+
+    dragging = true;
+
+    draggedPlayer =
+        player === 1
+        ? player1Ball
+        : player2Ball;
+
+
+    draggedPlayer.classList.add(
+        "dragging"
+    );
+
+
+    draggedPlayer.setPointerCapture(
+        event.pointerId
+    );
+
+
+    moveBall(event);
+
+}
+
+
+/* =========================
+   MOVE BALL
+========================= */
+
+function moveBall(event) {
+
+    if (!dragging ||
+        draggedPlayer === null) {
+
+        return;
+
+    }
+
+
+    const rect =
+        board.getBoundingClientRect();
+
+
+    let x =
+        ((event.clientX -
+        rect.left) /
+        rect.width) * 100;
+
+
+    let y =
+        ((event.clientY -
+        rect.top) /
+        rect.height) * 100;
+
+
+    x =
+        Math.max(
+            0,
+            Math.min(100, x)
+        );
+
+    y =
+        Math.max(
+            0,
+            Math.min(100, y)
+        );
+
+
+    draggedPlayer.style.left =
+        x + "%";
+
+    draggedPlayer.style.top =
+        y + "%";
+
+}
+
+
+/* =========================
+   FINISH DRAGGING
+========================= */
+
+function finishDragging(event) {
+
+    if (!dragging) {
+        return;
+    }
+
+
+    const landedSquare =
+        getSquareFromPointer(event);
+
+
+    dragging = false;
+
+
+    if (draggedPlayer) {
+
+        draggedPlayer.classList.remove(
+            "dragging"
+        );
+
+    }
+
+
+    /*
+     * CHEATING CHECK
+     */
+
+    if (landedSquare !== target) {
+
+        message.className =
+            "cheating";
+
+        message.textContent =
+            "🚨 CHEATING! You needed square " +
+            target + ".";
+
+
+        target = null;
+
+        rollButton.disabled = false;
+
+        updateBalls();
+
+        draggedPlayer = null;
+
+        return;
+
+    }
+
+
+    /*
+     * CORRECT MOVE
+     */
+
+    message.className =
+        "correct";
+
+    message.textContent =
+        "✓ Correct!";
+
+
+    if (currentPlayer === 1) {
+
+        player1 =
+            target;
+
+    } else {
+
+        player2 =
+            target;
+
+    }
+
+
+    /*
+     * LADDER
+     */
+
+    if (ladders[target]) {
+
+        const newPosition =
+            ladders[target];
+
+
+        message.textContent =
+            "🪜 Ladder! You climbed to " +
+            newPosition + "!";
+
+
+        if (currentPlayer === 1) {
+
+            player1 =
+                newPosition;
+
+        } else {
+
+            player2 =
+                newPosition;
+
+        }
+
+    }
+
+
+    /*
+     * SNAKE
+     */
+
+    if (snakes[target]) {
+
+        const newPosition =
+            snakes[target];
+
+
+        message.textContent =
+            "🐍 Snake! You went down to " +
+            newPosition + "!";
+
+
+        if (currentPlayer === 1) {
+
+            player1 =
+                newPosition;
+
+        } else {
+
+            player2 =
+                newPosition;
+
+        }
+
+    }
+
+
+    updateBalls();
+
+
+    /*
+     * CHECK WINNER
+     */
+
+    const finalPosition =
+        currentPlayer === 1
+        ? player1
+        : player2;
+
+
+    if (finalPosition === 100) {
+
+        message.className =
+            "winner";
+
+        message.textContent =
+            "🏆 PLAYER " +
+            currentPlayer +
+            " WINS!";
+
+
+        rollButton.disabled =
+            true;
+
+        target = null;
+
+        draggedPlayer = null;
+
+        return;
+
+    }
+
+
+    /*
+     * CHANGE PLAYER
+     */
+
+    if (currentPlayer === 1) {
+
+        currentPlayer = 2;
+
+    } else {
+
+        currentPlayer = 1;
+
+    }
+
+
+    if (currentPlayer === 1) {
+
+        turnLabel.textContent =
+            "🔵 Player 1's Turn";
+
+    } else {
+
+        turnLabel.textContent =
+            "🟡 Player 2's Turn";
+
+    }
+
+
+    target = null;
+
+    rollButton.disabled =
+        false;
+
+    draggedPlayer = null;
+
+}
+
+
+/* =========================
+   PLAYER 1 CONTROLS
+========================= */
+
+player1Ball.addEventListener(
+    "pointerdown",
+    function (event) {
+
+        startDragging(
+            event,
+            1
+        );
+
+    }
+);
+
+
+player1Ball.addEventListener(
+    "pointermove",
+    moveBall
+);
+
+
+player1Ball.addEventListener(
+    "pointerup",
+    finishDragging
+);
+
+
+player1Ball.addEventListener(
+    "pointercancel",
+    finishDragging
+);
+
+
+/* =========================
+   PLAYER 2 CONTROLS
+========================= */
+
+player2Ball.addEventListener(
+    "pointerdown",
+    function (event) {
+
+        startDragging(
+            event,
+            2
+        );
+
+    }
+);
+
+
+player2Ball.addEventListener(
+    "pointermove",
+    moveBall
+);
+
+
+player2Ball.addEventListener(
+    "pointerup",
+    finishDragging
+);
+
+
+player2Ball.addEventListener(
+    "pointercancel",
+    finishDragging
+);
+
+
+/* =========================
+   RESET GAME
+========================= */
+
+resetButton.addEventListener(
+    "click",
+    function () {
+
+        player1 = 1;
+
+        player2 = 1;
+
+        currentPlayer = 1;
+
+        dice = 0;
+
+        target = null;
+
+        dragging = false;
+
+        draggedPlayer = null;
+
+
+        turnLabel.textContent =
+            "🔵 Player 1's Turn";
+
+        diceLabel.textContent =
+            "-";
+
+        message.className = "";
+
+        message.textContent =
+            "Player 1, roll the dice!";
+
+        rollButton.disabled =
+            false;
+
+
+        updateBalls();
+
+    }
+);
+
+
+/* =========================
+   START GAME
+========================= */
+
+createBoard();
+
+updateBalls();
+
+</script>
+
+</body>
+              </html>
